@@ -20,7 +20,7 @@ import glob
 from collections import defaultdict 
 from pyliftover import LiftOver
 
-update_time = '2019-02-05'
+update_time = input("Please input update date in format yyy-mm-dd: ")
 
 #specify which assembly lifting from and to
 lo = LiftOver('hg38', 'Hg19')
