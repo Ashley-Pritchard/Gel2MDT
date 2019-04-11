@@ -20,6 +20,8 @@ import glob
 from collections import defaultdict 
 from pyliftover import LiftOver
 
+update_time = '2019-02-05'
+
 #specify which assembly lifting from and to
 lo = LiftOver('hg38', 'Hg19')
 
@@ -58,7 +60,7 @@ def get_list(update_time):
 		for row in rows:
 			writer.writerow(row)
 
-get_list('2019-02-05')
+get_list(update_time)
 
 df_gel = pd.read_csv('gel_id.csv')
 df_gel.set_index('Gel_id', inplace=True)
