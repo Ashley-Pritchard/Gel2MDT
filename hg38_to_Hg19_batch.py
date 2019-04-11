@@ -20,8 +20,6 @@ import glob
 from collections import defaultdict 
 from pyliftover import LiftOver
 
-input_file_list = glob.glob('Gel2MDT_Export_*_MutationReport.csv')
-
 #specify which assembly lifting from and to
 lo = LiftOver('hg38', 'Hg19')
 
@@ -59,6 +57,8 @@ def get_list(update_time):
 		writer.writerow(column_head)
 		for row in rows:
 			writer.writerow(row)
+
+get_list('2019-02-05')
 
 df_gel = pd.read_csv('gel_id.csv')
 df_gel.set_index('Gel_id', inplace=True)
@@ -106,6 +106,8 @@ for index, row in df_gel.iterrows():
 			os.remove(csv_file)
 
 	delete_csv(csv_file)
+
+input_file_list = glob.glob('Gel2MDT_Export_*_MutationReport.csv')
 
 #liftover of 'hg38 Reference Position'
 def lift_over(input_file_list):
@@ -350,7 +352,7 @@ def add_date_time(input_file_list):
 
 add_date_time(input_file_list)	
 
-get_list('2019-02-05')
+
 	
 	
 	
