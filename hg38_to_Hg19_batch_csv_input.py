@@ -22,7 +22,7 @@ lo = LiftOver('hg38', 'Hg19')
 username = 
 password = 
 
-db_name = 'gel2mdt_db_natasha'
+db_name = 'gel2mdt_db'
 
 conn = psycopg2.connect(host='localhost', database=db_name, user=username, password=password)
 
@@ -98,7 +98,7 @@ for index, row in df_gel.iterrows():
 	#some gel ids return empty csv files - inform user and delete files
 	def delete_csv(csv_file):
 		df = pd.read_csv(csv_file)
-		if df['hg38 Reference Position'].isnull().sum().sum() >= 1:
+		if df.empty:
 			print(csv_file + ' is empty and has been deleted')
 			os.remove(csv_file)
 
