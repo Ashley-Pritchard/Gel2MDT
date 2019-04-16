@@ -80,7 +80,7 @@ for index, row in df_gel.iterrows():
 		LEFT JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
 		LEFT JOIN "Transcript" ON "TranscriptVariant"."transcript_id" = "Transcript"."id"
 		LEFT JOIN "Gene" ON "Transcript"."gene_id" = "Gene"."id"
-		WHERE "Proband"."gel_id" = %s
+		WHERE "Transcript"."canonical_transcript" = TRUE AND "Proband"."gel_id" = %s
 		''', (gel_id,))
 
 		#write csv file for each gel id
