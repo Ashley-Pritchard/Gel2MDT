@@ -22,7 +22,7 @@ lo = LiftOver('hg38', 'Hg19')
 username = 
 password = 
 
-db_name = 'gel2mdt_db_natasha'
+db_name = 'gel2mdt_db'
 
 conn = psycopg2.connect(host='localhost', database=db_name, user=username, password=password)
 
@@ -111,11 +111,11 @@ for index, row in df_gel.iterrows():
 	def variant_pull(gel_id):
 		
 		#specify headers of output csv file
-		column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut']
+		column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']
 
 		#pull relevant data out of the database for each gel id
 		cur.execute('''
-		SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Transcript"."name", "Variant"."chromosome", "TranscriptVariant"."hgvs_c", "TranscriptVariant"."hgvs_p", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g"
+		SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Transcript"."name", "Variant"."chromosome", "TranscriptVariant"."hgvs_c", "TranscriptVariant"."hgvs_p", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
 		FROM "Proband"
 		LEFT JOIN "Family" ON "Proband"."family_id" = "Family"."id"
 		LEFT JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
@@ -125,7 +125,7 @@ for index, row in df_gel.iterrows():
 		LEFT JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
 		LEFT JOIN "Transcript" ON "TranscriptVariant"."transcript_id" = "Transcript"."id"
 		LEFT JOIN "Gene" ON "Transcript"."gene_id" = "Gene"."id"
-		WHERE "Proband"."gel_id" = %s
+		WHERE "Transcript"."canonical_transcript" = TRUE AND "Proband"."gel_id" = %s
 		''', (gel_id,))
 
 		#write csv file for each gel id
@@ -143,7 +143,7 @@ for index, row in df_gel.iterrows():
 	#some gel ids return empty csv files - inform user and delete files
 	def delete_csv(csv_file):
 		df = pd.read_csv(csv_file)
-		if df['hg38 Reference Position'].isnull().sum().sum() >= 1:
+		if df.empty:
 			print(csv_file + ' is empty and has been deleted')
 			os.remove(csv_file)
 
@@ -212,7 +212,7 @@ def reformat_lift_over(input_file_list):
 
 		#overwrite csv file
 		df.to_csv(input_file, sep=',')
-
+		
 #call function
 reformat_lift_over(input_file_list)
 	
@@ -352,6 +352,7 @@ def update_alamut_coord(input_file_list):
 		#set index
 		df.set_index('Unnamed: 0', inplace=True)
 
+		#split the alamut column into 2 on '.' and save the 0 index (chr.g) to a new column
 		df2 = df['Alamut'].str.split('.', n=2, expand=True)
 		df['Chrom.g'] = df2[0]
 
@@ -371,7 +372,7 @@ def update_alamut_coord(input_file_list):
 		df['Genomic Change'] = df['Alamut'].replace(to_replace= df['Delete'], value='', regex=True)
 
 		#reformat the 'Alamut' field to the LiftOver output 1:g.12345678A>G / 1:g.12345678_12345689del
-		df['Alamut'] = df['Chrom.g'].astype(str) + '.' + df['Concat Reference Positions'].astype(str) + df['Genomic Change'].astype(str)
+		df['Alamut'] = df['Chr'].astype(str) + ':' + df['Concat Reference Positions'].astype(str) + df['Genomic Change'].astype(str)
 
 		#drop unnecessary columns
 		df.drop(columns = ['First Coordinate', 'Second Coordinate', 'Concat Reference Positions', 'Chrom.g', 'Concat Coordinates', 'Delete', 'Genomic Change'], inplace=True)
@@ -385,6 +386,29 @@ def update_alamut_coord(input_file_list):
 #call function
 update_alamut_coord(input_file_list)
 
+#reformat the 'Mutation Call' column to give the output c.variant - remove earlier transcript information
+def reformat_mutation_call(input_file_list):
+
+	#read in batch of csv files as pandas dataframe
+	for input_file in input_file_list:
+		df = pd.read_csv(input_file)
+		#set index
+		df.set_index('Unnamed: 0', inplace=True)
+
+		#not every record has a mutation call - fill the 'nan' with empty string to allow processing 
+		df['Mutation Call'] = df['Mutation Call'].fillna('')
+		#split on ':' into 2 and overwrite column with index 1
+		df['Mutation Call'] = df['Mutation Call'].str.split(':', n=2, expand=True)[1]
+
+		#overwrite csv file 
+		df.to_csv(input_file, sep=',')
+
+	#inform user of stage
+	print('Mutation call updated')
+
+#call function
+reformat_mutation_call(input_file_list)
+
 #reorder the columns to match the csv file format used downstream in the workflow
 def reorder(input_file_list):
 	
@@ -397,7 +421,7 @@ def reorder(input_file_list):
 		#drop the original hg38 Reference Position
 		df.drop(columns = ['hg38 Reference Position'], inplace=True)
 		#Reorder the columns of the dataframe 
-		df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut']]
+		df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']]
 
 		#overwrite csv, don't save the index
 		df.to_csv(input_file, sep=',', index=False)
