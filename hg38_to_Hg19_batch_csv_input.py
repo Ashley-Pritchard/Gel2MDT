@@ -307,6 +307,7 @@ def update_alamut_coord(input_file_list):
 		#set index
 		df.set_index('Unnamed: 0', inplace=True)
 
+		#split the alamut column into 2 on '.' and save the 0 index (chr.g) to a new column 
 		df2 = df['Alamut'].str.split('.', n=2, expand=True)
 		df['Chrom.g'] = df2[0]
 
