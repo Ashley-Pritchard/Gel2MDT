@@ -326,7 +326,7 @@ def update_alamut_coord(input_file_list):
 		df['Genomic Change'] = df['Alamut'].replace(to_replace= df['Delete'], value='', regex=True)
 
 		#reformat the 'Alamut' field to the LiftOver output 1:g.12345678A>G / 1:g.12345678_12345689del
-		df['Alamut'] = df['Chrom.g'].astype(str) + '.' + df['Concat Reference Positions'].astype(str) + df['Genomic Change'].astype(str)
+		df['Alamut'] = df['Chr'].astype(str) + ':' + df['Concat Reference Positions'].astype(str) + df['Genomic Change'].astype(str)
 
 		#drop unnecessary columns
 		df.drop(columns = ['First Coordinate', 'Second Coordinate', 'Concat Reference Positions', 'Chrom.g', 'Concat Coordinates', 'Delete', 'Genomic Change'], inplace=True)
