@@ -148,7 +148,7 @@ def lift_over(input_file_list):
 	print('LiftOver of Reference Position complete')
 
 #call function		
-#lift_over(input_file_list)
+lift_over(input_file_list)
 
 #liftover output is '[('chr1', 12345678, '+', 12345678910)] - need to extract the coordinate
 def reformat_lift_over(input_file_list):
@@ -169,7 +169,7 @@ def reformat_lift_over(input_file_list):
 		df.to_csv(input_file, sep=',')
 		
 #call function
-#reformat_lift_over(input_file_list)
+reformat_lift_over(input_file_list)
 	
 #for del / dup / ins need to do a liftover of the 'Genomic Coordinate' which is in the format '1:g.12345678_12345680del' - first need to extract the coordinates
 def extract_genomic_coord(input_file_list):
@@ -198,7 +198,7 @@ def extract_genomic_coord(input_file_list):
 		df.to_csv(input_file, sep=',')
 	
 #call function
-#extract_genomic_coord(input_file_list)
+extract_genomic_coord(input_file_list)
 
 #can now do liftover of the two genomic coordinates
 def lift_over_genomic_coord(input_file_list):
@@ -241,7 +241,7 @@ def lift_over_genomic_coord(input_file_list):
 	print('LiftOver of Genomic Coordinate complete')
 
 #call function
-#lift_over_genomic_coord(input_file_list)
+lift_over_genomic_coord(input_file_list)
 
 #as above, liftover output is '[('chr1', 12345678, '+', 12345678910)] - need to extract the coordinate
 def reformat_genomic_lift_over(input_file_list):
@@ -266,7 +266,7 @@ def reformat_genomic_lift_over(input_file_list):
 		df.to_csv(input_file, sep=',')
 	
 #call function
-#reformat_genomic_lift_over(input_file_list)
+reformat_genomic_lift_over(input_file_list)
 
 #reformat the 'Genomic Coordinate' field to contain the LiftOver output 'Chr1.hg19:g.12345678(_12345689)
 def update_genomic_coord(input_file_list):
@@ -296,7 +296,7 @@ def update_genomic_coord(input_file_list):
 		df.to_csv(input_file, sep=',')
 
 #call function
-#update_genomic_coord(input_file_list)
+update_genomic_coord(input_file_list)
 
 #reformat the 'Alamut' field to contain the LiftOver output '1:g.12345678G>A / 1:g.12345678_12345689del
 def update_alamut_coord(input_file_list):
@@ -338,7 +338,30 @@ def update_alamut_coord(input_file_list):
 	print('Alamut input updated')
 
 #call function
-#update_alamut_coord(input_file_list)
+update_alamut_coord(input_file_list)
+
+#reformat the 'Mutation Call' column to give the output c.variant - remove earlier transcript information
+def reformat_mutation_call(input_file_list):
+
+	#read in batch of csv files as pandas dataframe
+	for input_file in input_file_list:
+		df = pd.read_csv(input_file)
+		#set index
+		df.set_index('Unnamed: 0', inplace=True)
+
+		#not every record has a mutation call - fill the 'nan' with empty string to allow processing 
+		df['Mutation Call'] = df['Mutation Call'].fillna('')
+		#split on ':' into 2 and overwrite column with index 1
+		df['Mutation Call'] = df['Mutation Call'].str.split(':', n=2, expand=True)[1]
+
+		#overwrite csv file 
+		df.to_csv(input_file, sep=',')
+
+	#inform user of stage
+	print('Mutation call updated')
+
+#call function
+reformat_mutation_call(input_file_list)
 
 #reorder the columns to match the csv file format used downstream in the workflow
 def reorder(input_file_list):
@@ -361,7 +384,7 @@ def reorder(input_file_list):
 	print('Mutation reports formated for output')
 
 #call function
-#reorder(input_file_list)
+reorder(input_file_list)
 
 #add the date and time to the csv file for tracability
 def add_date_time(input_file_list):
@@ -385,5 +408,5 @@ def add_date_time(input_file_list):
 	print('Mutation reports are ready')
 
 #call function
-#add_date_time(input_file_list)		
+add_date_time(input_file_list)		
 
