@@ -66,11 +66,11 @@ for index, row in df_gel.iterrows():
 	def variant_pull(gel_id):
 		
 		#specify headers of output csv file
-		column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut']
+		column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']
 
 		#pull relevant data out of the database for each gel id
 		cur.execute('''
-		SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Transcript"."name", "Variant"."chromosome", "TranscriptVariant"."hgvs_c", "TranscriptVariant"."hgvs_p", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g"
+		SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Transcript"."name", "Variant"."chromosome", "TranscriptVariant"."hgvs_c", "TranscriptVariant"."hgvs_p", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
 		FROM "Proband"
 		LEFT JOIN "Family" ON "Proband"."family_id" = "Family"."id"
 		LEFT JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
@@ -375,7 +375,7 @@ def reorder(input_file_list):
 		#drop the original hg38 Reference Position
 		df.drop(columns = ['hg38 Reference Position'], inplace=True)
 		#Reorder the columns of the dataframe 
-		df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut']]
+		df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']]
 
 		#overwrite csv, don't save the index
 		df.to_csv(input_file, sep=',', index=False)
