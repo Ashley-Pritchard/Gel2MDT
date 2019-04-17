@@ -332,27 +332,6 @@ def update_genomic_coord(input_file_list):
 		df['Concat Reference Positions'] = df['Concat Reference Positions'].str.split('.', n=2, expand=True)[0]
 		#strip the '_' from the missence variants which do not have a second reference position
 		df['Concat Reference Positions'] = df['Concat Reference Positions'].str.rstrip('_')
-	
-		#concatinate the chromosome, '.hg19:g.' and reference position to give the 'Genomic Coordinate'
-		df['Genomic Coordinate'] = 'Chr' + df['Chr'].astype(str) + '.hg19:g.' + df['Concat Reference Positions'].astype(str)
-
-		#drop unnecessary columns
-		df.drop(columns = ['First Reference Position', 'Second Reference Position'], inplace=True)
-	
-		#overwrite csv file
-		df.to_csv(input_file, sep=',')
-
-#call function
-update_genomic_coord(input_file_list)
-
-#reformat the 'Alamut' field to contain the LiftOver output '1:g.12345678G>A / 1:g.12345678_12345689del
-def update_alamut_coord(input_file_list):
-
-	#read in batch of csv files as pandas dataframe
-	for input_file in input_file_list:
-		df = pd.read_csv(input_file)
-		#set index
-		df.set_index('Unnamed: 0', inplace=True)
 
 		#split the alamut column into 2 on '.' and save the 0 index (chr.g) to a new column
 		df2 = df['Alamut'].str.split('.', n=2, expand=True)
@@ -372,12 +351,33 @@ def update_alamut_coord(input_file_list):
 
 		#replace this field from the 'Genomic Change' field to leave only the genomic change
 		df['Genomic Change'] = df['Alamut'].replace(to_replace= df['Delete'], value='', regex=True)
+	
+		#concatinate the chromosome, '.hg19:g.' and reference position to give the 'Genomic Coordinate'
+		df['Genomic Coordinate'] = 'Chr' + df['Chr'].astype(str) + '.hg19:g.' + df['Concat Reference Positions'].astype(str) + df['Genomic Change']
+
+		#drop unnecessary columns
+		df.drop(columns = ['First Reference Position', 'Second Reference Position', 'First Coordinate', 'Second Coordinate','Chrom.g', 'Concat Coordinates', 'Delete'], inplace=True)
+	
+		#overwrite csv file
+		df.to_csv(input_file, sep=',')
+
+#call function
+update_genomic_coord(input_file_list)
+
+#reformat the 'Alamut' field to contain the LiftOver output '1:g.12345678G>A / 1:g.12345678_12345689del
+def update_alamut_coord(input_file_list):
+
+	#read in batch of csv files as pandas dataframe
+	for input_file in input_file_list:
+		df = pd.read_csv(input_file)
+		#set index
+		df.set_index('Unnamed: 0', inplace=True)
 
 		#reformat the 'Alamut' field to the LiftOver output 1:g.12345678A>G / 1:g.12345678_12345689del
 		df['Alamut'] = df['Chr'].astype(str) + ':' + df['Concat Reference Positions'].astype(str) + df['Genomic Change'].astype(str)
 
 		#drop unnecessary columns
-		df.drop(columns = ['First Coordinate', 'Second Coordinate', 'Concat Reference Positions', 'Chrom.g', 'Concat Coordinates', 'Delete', 'Genomic Change'], inplace=True)
+		df.drop(columns = ['Concat Reference Positions', 'Genomic Change'], inplace=True)
 	
 		#overwrite csv file 
 		df.to_csv(input_file, sep=',')
