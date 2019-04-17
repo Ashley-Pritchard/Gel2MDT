@@ -1,12 +1,6 @@
 #!/bin/sh
 
-#note - what do we want the input to be? Numerous files?
-#note - run from the command line?
-#note - add some tests 
-
-#note - pyliftover output - '+' '-' and long number?
-#note - del and dup issue - reference position or genomic coordinate used? 
-
+#import relevant libraries
 import psycopg2
 import pandas as pd
 import sys
@@ -14,15 +8,10 @@ import requests
 import csv
 import numpy as np
 import re 
+import os
 import datetime
 from collections import defaultdict 
 from pyliftover import LiftOver
-
-#input gel_id
-gel_id = '117001175'
-
-#name csv file based on gel_id
-csv_file = 'Gel2MDT_Export_%s_MutationReport.csv' % (gel_id,)
 
 #specify which assembly lifting from and to
 lo = LiftOver('hg38', 'Hg19')
@@ -31,21 +20,29 @@ lo = LiftOver('hg38', 'Hg19')
 username = 
 password = 
 
-
 db_name = 'gel2mdt_db_natasha'
 
 conn = psycopg2.connect(host='localhost', database=db_name, user=username, password=password)
 
 cur = conn.cursor()
 
+#ask for gel_id input via the command line 
+gel_id = input("Please input the gel_id: ")
+
+#name csv file based on gel_id
+csv_file = 'Gel2MDT_Export_%s_MutationReport.csv' % (gel_id,)
+
 #specify headers of output csv file
-column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut']
+column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']
+
+#inform user of stage 
+print('A csv file for your gel_id is now being created')
 
 #populate csv file from database
 def variant_pull(gel_id):
 
 	cur.execute('''
-	SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Transcript"."name", "Variant"."chromosome", "TranscriptVariant"."hgvs_c", "TranscriptVariant"."hgvs_p", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g"
+	SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Transcript"."name", "Variant"."chromosome", "TranscriptVariant"."hgvs_c", "TranscriptVariant"."hgvs_p", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
 	FROM "Proband"
 	LEFT JOIN "Family" ON "Proband"."family_id" = "Family"."id"
 	LEFT JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
@@ -55,7 +52,7 @@ def variant_pull(gel_id):
 	LEFT JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
 	LEFT JOIN "Transcript" ON "TranscriptVariant"."transcript_id" = "Transcript"."id"
 	LEFT JOIN "Gene" ON "Transcript"."gene_id" = "Gene"."id"
-	WHERE "Proband"."gel_id" = %s
+	WHERE "Transcript"."canonical_transcript" = TRUE AND "Proband"."gel_id" = %s
 	''', (gel_id,))
 
 	#write csv file
@@ -66,6 +63,14 @@ def variant_pull(gel_id):
 		writer.writerow(column_head)
 		for row in rows:
 			writer.writerow(row)
+
+#some gel ids return empty csv files - inform user and delete files
+def delete_csv(csv_file):
+	df = pd.read_csv(csv_file)
+	if df.empty:
+		print(csv_file + ' did not return any data')
+		os.remove(csv_file)
+		sys.exit()
 
 #liftover of 'hg38 Reference Position'
 def lift_over(csv_file):
@@ -93,6 +98,9 @@ def lift_over(csv_file):
 	df['Hg19'] = Hg19
 	#overwrite csv file
 	df.to_csv(csv_file, sep=',')
+
+	#inform user of stage
+	print('LiftOver of Reference Position complete')
 
 #liftover output is '[('chr1', 12345678, '+', 12345678910)] - need to extra the coordinate
 def reformat_lift_over(csv_file):
@@ -173,6 +181,9 @@ def lift_over_genomic_coord(csv_file):
 	#overwrite csv file
 	df.to_csv(csv_file, sep=',')
 
+	#inform user of stage
+	print('LiftOver of Genomic Coordinate complete')
+
 #liftover output is '[('chr1', 12345678, '+', 12345678910)] - need to extract the coordinate
 def reformat_genomic_lift_over(csv_file):
 
@@ -242,13 +253,35 @@ def update_alamut_coord(csv_file):
 
 	df['Genomic Change'] = df['Alamut'].replace(to_replace= df['Delete'], value='', regex=True)
 
-	df['Alamut'] = df['Chrom.g'].astype(str) + '.' + df['Concat Reference Positions'].astype(str) + df['Genomic Change'].astype(str)
+	df['Alamut'] = df['Chr'].astype(str) + ':' + df['Concat Reference Positions'].astype(str) + df['Genomic Change'].astype(str)
 
 	#drop unnecessary columns
 	df.drop(columns = ['First Coordinate', 'Second Coordinate', 'Concat Reference Positions', 'Chrom.g', 'Concat Coordinates', 'Delete', 'Genomic Change'], inplace=True)
 	
 	#overwrite csv file 
 	df.to_csv(csv_file, sep=',')
+
+	#inform user of stage
+	print('Alamut input updated')
+
+#reformat the 'Mutation Call' column to give the output c.variant - remove earlier transcript information
+def reformat_mutation_call(csv_file):
+
+	#read in csv files pandas dataframe
+	df = pd.read_csv(csv_file)
+	#set index
+	df.set_index('Unnamed: 0', inplace=True)
+
+	#not every record has a mutation call - fill the 'nan' with empty string to allow processing 
+	df['Mutation Call'] = df['Mutation Call'].fillna('')
+	#split on ':' into 2 and overwrite column with index 1
+	df['Mutation Call'] = df['Mutation Call'].str.split(':', n=2, expand=True)[1]
+
+	#overwrite csv file 
+	df.to_csv(csv_file, sep=',')
+
+	#inform user of stage
+	print('Mutation call updated')
 
 def reorder(csv_file):
 	
@@ -260,10 +293,13 @@ def reorder(csv_file):
 	#drop the original hg38 Reference Position
 	df.drop(columns = ['hg38 Reference Position'], inplace=True)
 	#Reorder the columns of the dataframe 
-	df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut']]
+	df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']]
 
 	#overwrite csv, don't save the index
 	df.to_csv(csv_file, sep=',', index=False)
+
+	#inform user of stage
+	print('Mutation report formated for output')
 
 def add_date_time(csv_file):
 
@@ -275,15 +311,18 @@ def add_date_time(csv_file):
 		r = csv.reader(f)
 		data = [line for line in r]
 	
-	#write '#Export: todays date and time' in the form '%c' - inbuilt python for local appropriate date and time representation
-	with open(csv_file,'w',newline='') as f:
-		w = csv.writer(f)
-		w.writerow(['#Export date: ' + date.strftime('%c') + '\n'])
-		w.writerows(data)
-		f.close()
+		#write '#Export: todays date and time' in the form '%c' - inbuilt python for local appropriate date and time representation
+		with open(csv_file,'w',newline='') as f:
+			w = csv.writer(f)
+			w.writerow(['#Export date: ' + date.strftime('%c') + '\n'])
+			w.writerows(data)
+			f.close()
 	
-
+	#inform user of stage
+	print('Mutation report is ready')
+#call functions 
 variant_pull(gel_id)
+delete_csv(csv_file)
 lift_over(csv_file)
 reformat_lift_over(csv_file)
 extract_genomic_coord(csv_file)
@@ -291,5 +330,6 @@ lift_over_genomic_coord(csv_file)
 reformat_genomic_lift_over(csv_file)
 update_genomic_coord(csv_file)
 update_alamut_coord(csv_file)
+reformat_mutation_call(csv_file)
 reorder(csv_file)
 add_date_time(csv_file)
