@@ -20,7 +20,7 @@ lo = LiftOver('hg38', 'Hg19')
 username = 
 password = 
 
-db_name = 'gel2mdt_db_natasha'
+db_name = 'gel2mdt_db'
 
 conn = psycopg2.connect(host='localhost', database=db_name, user=username, password=password)
 
@@ -52,7 +52,7 @@ def variant_pull(gel_id):
 	LEFT JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
 	LEFT JOIN "Transcript" ON "TranscriptVariant"."transcript_id" = "Transcript"."id"
 	LEFT JOIN "Gene" ON "Transcript"."gene_id" = "Gene"."id"
-	WHERE "Proband"."gel_id" = %s
+	WHERE "Variant"."position" IS NOT NULL AND "Proband"."gel_id" = %s
 	''', (gel_id,))
 
 	#write csv file
@@ -67,7 +67,7 @@ def variant_pull(gel_id):
 #some gel ids return empty csv files - inform user and delete files
 def delete_csv(csv_file):
 	df = pd.read_csv(csv_file)
-	if df.empty:
+	if df.dropna().empty:
 		print(csv_file + ' did not return any data')
 		os.remove(csv_file)
 		sys.exit()
@@ -304,12 +304,12 @@ def add_date_time(csv_file):
 #call functions 
 variant_pull(gel_id)
 delete_csv(csv_file)
-lift_over(csv_file)
-reformat_lift_over(csv_file)
-extract_genomic_coord(csv_file)
-lift_over_genomic_coord(csv_file)
-reformat_genomic_lift_over(csv_file)
-update_genomic_coord(csv_file)
-update_alamut_coord(csv_file)
-reorder(csv_file)
-add_date_time(csv_file)
+#lift_over(csv_file)
+#reformat_lift_over(csv_file)
+#extract_genomic_coord(csv_file)
+#lift_over_genomic_coord(csv_file)
+#reformat_genomic_lift_over(csv_file)
+#update_genomic_coord(csv_file)
+#update_alamut_coord(csv_file)
+#reorder(csv_file)
+#add_date_time(csv_file)
