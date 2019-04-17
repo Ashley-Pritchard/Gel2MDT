@@ -52,7 +52,7 @@ def variant_pull(gel_id):
 	LEFT JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
 	LEFT JOIN "Transcript" ON "TranscriptVariant"."transcript_id" = "Transcript"."id"
 	LEFT JOIN "Gene" ON "Transcript"."gene_id" = "Gene"."id"
-	WHERE "Transcript"."canonical_transcript" = TRUE AND "Proband"."gel_id" = %s
+	WHERE "Proband"."gel_id" = %s
 	''', (gel_id,))
 
 	#write csv file
