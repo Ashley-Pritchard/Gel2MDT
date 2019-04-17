@@ -295,7 +295,7 @@ def add_date_time(csv_file):
 		#write '#Export: todays date and time' in the form '%c' - inbuilt python for local appropriate date and time representation
 		with open(csv_file,'w',newline='') as f:
 			w = csv.writer(f)
-			w.writerow(['#Export date: ' + date.strftime('%c') + '\n'])
+			w.writerow(['#Export date: ' + date.strftime('%c')])
 			w.writerows(data)
 			f.close()
 	
