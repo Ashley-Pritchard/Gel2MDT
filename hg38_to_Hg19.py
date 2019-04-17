@@ -33,7 +33,7 @@ gel_id = input("Please input the gel_id: ")
 csv_file = 'Gel2MDT_Export_%s_MutationReport.csv' % (gel_id,)
 
 #specify headers of output csv file
-column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']
+column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']
 
 #inform user of stage 
 print('A csv file for your gel_id is now being created')
@@ -42,7 +42,7 @@ print('A csv file for your gel_id is now being created')
 def variant_pull(gel_id):
 
 	cur.execute('''
-	SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Transcript"."name", "Variant"."chromosome", "TranscriptVariant"."hgvs_c", "TranscriptVariant"."hgvs_p", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
+	SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Variant"."chromosome", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
 	FROM "Proband"
 	LEFT JOIN "Family" ON "Proband"."family_id" = "Family"."id"
 	LEFT JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
@@ -90,7 +90,7 @@ def lift_over(csv_file):
 	#itterate over rows of dataframe 
 	for index, row in df.iterrows():
 		#use 'Chr' and 'hg38 Reference Position' as input for liftover tool 
-		LiftOver_results = lo.convert_coordinate(row[5], row[0])
+		LiftOver_results = lo.convert_coordinate(row[4], row[0])
 		#append results to Hg19
 		Hg19.append(LiftOver_results)
 	
@@ -160,14 +160,14 @@ def lift_over_genomic_coord(csv_file):
 	#itterate over rows of dataframe
 	for index, row in df.iterrows():
 		#use 'Chr' and 'First Coordinate' as input for liftover tool
-		liftover = lo.convert_coordinate(row[5], row[12])
+		liftover = lo.convert_coordinate(row[4], row[10])
 		#append results
 		First_Coordinate_LiftOver.append(liftover)
 
 	#itterate over rows of dataframe
 	for index, row in df.iterrows():
 		#use 'Chr' and 'Second Coordinate' as input for liftover tool
-		liftover = lo.convert_coordinate(row[5], row[13])
+		liftover = lo.convert_coordinate(row[4], row[11])
 		#append results
 		Second_Coordinate_LiftOver.append(liftover)
 	
@@ -194,8 +194,8 @@ def reformat_genomic_lift_over(csv_file):
 
 	#split 'First Coordinate LiftOver' into 4 on ',' ( [('chr1' / 12345678 / '+' / 12345678910)] ) and save index 1 as 'First Referenece Position'
 	df['First Reference Position'] = df['First Coordinate LiftOver'].str.split(',', n=4, expand=True)[1]
-	#do the same with the 'Second Coordinate LiftOver'
-	df['Second Reference Position'] = df['Second Coordinate LiftOver'].str.split(',', n=4, expand=True)[1]
+	#do the same with the 'Second Coordinate LiftOver'. Also split on '[]' as this is the output for the rows without a second coordinate to liftover. 
+	df['Second Reference Position'] = df['Second Coordinate LiftOver'].str.split(',|\[|]', n=4, expand=True)[2]
 	#use split to remove the '.0' that is added to the second reference position
 	df['Second Reference Position'] = df['Second Reference Position'].str.split('.', n=2, expand=True)[0]
 
@@ -264,25 +264,6 @@ def update_alamut_coord(csv_file):
 	#inform user of stage
 	print('Alamut input updated')
 
-#reformat the 'Mutation Call' column to give the output c.variant - remove earlier transcript information
-def reformat_mutation_call(csv_file):
-
-	#read in csv files pandas dataframe
-	df = pd.read_csv(csv_file)
-	#set index
-	df.set_index('Unnamed: 0', inplace=True)
-
-	#not every record has a mutation call - fill the 'nan' with empty string to allow processing 
-	df['Mutation Call'] = df['Mutation Call'].fillna('')
-	#split on ':' into 2 and overwrite column with index 1
-	df['Mutation Call'] = df['Mutation Call'].str.split(':', n=2, expand=True)[1]
-
-	#overwrite csv file 
-	df.to_csv(csv_file, sep=',')
-
-	#inform user of stage
-	print('Mutation call updated')
-
 def reorder(csv_file):
 	
 	#read csv file as pandas dataframe 
@@ -293,7 +274,7 @@ def reorder(csv_file):
 	#drop the original hg38 Reference Position
 	df.drop(columns = ['hg38 Reference Position'], inplace=True)
 	#Reorder the columns of the dataframe 
-	df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Transcript', 'Chr', 'Mutation Call', 'Amino Acid Change', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']]
+	df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']]
 
 	#overwrite csv, don't save the index
 	df.to_csv(csv_file, sep=',', index=False)
@@ -330,6 +311,5 @@ lift_over_genomic_coord(csv_file)
 reformat_genomic_lift_over(csv_file)
 update_genomic_coord(csv_file)
 update_alamut_coord(csv_file)
-reformat_mutation_call(csv_file)
 reorder(csv_file)
 add_date_time(csv_file)
