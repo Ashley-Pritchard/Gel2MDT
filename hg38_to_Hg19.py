@@ -42,7 +42,7 @@ print('A csv file for your gel_id is now being created')
 def variant_pull(gel_id):
 
 	cur.execute('''
-	SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Variant"."chromosome", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
+	SELECT DISTICNT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Variant"."chromosome", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
 	FROM "Proband"
 	LEFT JOIN "Family" ON "Proband"."family_id" = "Family"."id"
 	LEFT JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
@@ -69,6 +69,8 @@ def delete_csv(csv_file):
 	df = pd.read_csv(csv_file)
 	if df.dropna().empty:
 		print(csv_file + ' did not return any data')
+		with open('empty_files.txt', 'a') as f:
+			f.write(csv_file + '\n')
 		os.remove(csv_file)
 		sys.exit()
 

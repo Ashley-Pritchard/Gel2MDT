@@ -70,7 +70,7 @@ for index, row in df_gel.iterrows():
 
 		#pull relevant data out of the database for each gel id
 		cur.execute('''
-		SELECT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Variant"."chromosome", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
+		SELECT DISTINCT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Variant"."chromosome", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
 		FROM "Proband"
 		LEFT JOIN "Family" ON "Proband"."family_id" = "Family"."id"
 		LEFT JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
@@ -99,6 +99,8 @@ for index, row in df_gel.iterrows():
 	def delete_csv(csv_file):
 		df = pd.read_csv(csv_file)
 		if df.dropna().empty:
+			with open('empty_files.txt', 'a') as f:
+				f.write(csv_file + '\n')
 			print(csv_file + ' is empty and has been deleted')
 			os.remove(csv_file)
 
@@ -379,7 +381,7 @@ def add_date_time(input_file_list):
 			#write '#Export: todays date and time' in the form '%c' - inbuilt python for local appropriate date and time representation
 			with open(input_file,'w',newline='') as f:
 				w = csv.writer(f)
-				w.writerow(['#Export date: ' + date.strftime('%c') + '\n'])
+				w.writerow(['#Export date: ' + date.strftime('%c')])
 				w.writerows(data)
 				f.close()
 	#inform user of stage

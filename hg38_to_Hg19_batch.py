@@ -64,7 +64,7 @@ def get_list(update_time):
 	#lift the gel ids from the database
 	column_head = ["Gel_id"]
 	cur.execute('''
-	SELECT "Proband"."gel_id"
+	SELECT DISTINCT "Proband"."gel_id"
 	FROM "Proband"
 	LEFT JOIN "Family" ON "Proband"."family_id" = "Family"."id"
 	LEFT JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
@@ -145,6 +145,8 @@ for index, row in df_gel.iterrows():
 		df = pd.read_csv(csv_file)
 		if df.dropna().empty:
 			print(csv_file + ' is empty and has been deleted')
+			with open('empty_files.txt', 'a') as f:
+				f.write(csv_file + '\n')
 			os.remove(csv_file)
 
 	#call function
