@@ -97,15 +97,16 @@ for index, row in df_gel.iterrows():
 	def variant_pull(gel_id):
 		
 		#specify headers of output csv file
-		column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']
+		column_head = ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier', 'Reference Genome']
 
 		#pull relevant data out of the database for each gel id
 		cur.execute('''
-		SELECT DISTINCT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Variant"."chromosome", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier"
+		SELECT DISTINCT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Variant"."chromosome", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier", "ToolOrAssemblyVersion"."version_number"
 		FROM "Proband"
 		LEFT JOIN "Family" ON "Proband"."family_id" = "Family"."id"
 		LEFT JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
 		LEFT JOIN "GELInterpretationReport" ON "InterpretationReportFamily"."id" = "GELInterpretationReport"."ir_family_id"
+		LEFT JOIN "ToolOrAssemblyVersion" ON "GELInterpretationReport"."assembly_id" = "ToolOrAssemblyVersion"."id"
 		LEFT JOIN "ProbandVariant" ON "GELInterpretationReport"."id" = "ProbandVariant"."interpretation_report_id"
 		LEFT JOIN "Variant" ON "ProbandVariant"."variant_id" = "Variant"."id"
 		LEFT JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
@@ -167,10 +168,19 @@ def lift_over(input_file_list):
 	
 		#itterate over rows of dataframe 
 		for index, row in df.iterrows():
-			#use 'Chr' and 'hg38 Reference Position' as input for liftover tool 
-			LiftOver_results = lo.convert_coordinate(row[4], row[0])
-			#append results to Hg19
-			Hg19.append(LiftOver_results)
+			if row[9] == 'GRCh38':
+				#use 'Chr' and 'hg38 Reference Position' as input for liftover tool 
+				LiftOver_results = lo.convert_coordinate(row[4], row[0])
+				#append results to Hg19
+				Hg19.append(LiftOver_results)
+			elif row[9] == 'GRCh37':
+				#use 'Chr' and 'hg38 Reference Position' as input for liftover tool 
+				LiftOver_results = row[0]
+				#append results to Hg19
+				Hg19.append(LiftOver_results)
+			else:
+				print('This batch contains a reference genome that is neither GRCh37 or GRCh38. Please investigate before running the script again.')
+				sys.exit()
 	
 		#populate empty Hg19 field with LiftOver results
 		df['Hg19'] = Hg19
@@ -192,8 +202,13 @@ def reformat_lift_over(input_file_list):
 		#in the liftover function, pandas assigned an index - assign the index to this column again to prevent duplication
 		df.set_index('Unnamed: 0', inplace=True)
 
-		#split the Hg19 field into 4 on ',' ( [('chr1' / 12345678 / '+' / 12345678910)] ) and save index 1 (zero based) as 'Reference Position' 
-		df['Reference Position'] = df['Hg19'].str.split(',', n=4, expand=True)[1]
+		for index, row in df.iterrows():
+			if row[9] == 'GRCh38':
+				#split the Hg19 field into 4 on ',' ( [('chr1' / 12345678 / '+' / 12345678910)] ) and save index 1 (zero based) as 'Reference Position' 
+				df['Reference Position'] = df['Hg19'].str.split(',', n=4, expand=True)[1]
+
+			else: 
+				df['Reference Position'] = df['hg38 Reference Position']
 
 		#drop unecessary column
 		df.drop(columns =['Hg19'], inplace=True)
@@ -274,7 +289,7 @@ def lift_over_genomic_coord(input_file_list):
 	print('LiftOver of Genomic Coordinate complete')
 
 #call function
-lift_over_genomic_coord(input_file_list)
+#lift_over_genomic_coord(input_file_list)
 
 #as above, liftover output is '[('chr1', 12345678, '+', 12345678910)] - need to extract the coordinate
 def reformat_genomic_lift_over(input_file_list):
@@ -299,7 +314,7 @@ def reformat_genomic_lift_over(input_file_list):
 		df.to_csv(input_file, sep=',')
 	
 #call function
-reformat_genomic_lift_over(input_file_list)
+#reformat_genomic_lift_over(input_file_list)
 
 #reformat the 'Genomic Coordinate' field to contain the LiftOver output 'Chr1.hg19:g.12345678(_12345689)
 def update_genomic_coord(input_file_list):
@@ -348,7 +363,7 @@ def update_genomic_coord(input_file_list):
 		df.to_csv(input_file, sep=',')
 
 #call function
-update_genomic_coord(input_file_list)
+#update_genomic_coord(input_file_list)
 
 #reformat the 'Alamut' field to contain the LiftOver output '1:g.12345678G>A / 1:g.12345678_12345689del
 def update_alamut_coord(input_file_list):
@@ -372,7 +387,7 @@ def update_alamut_coord(input_file_list):
 	print('Alamut input updated')
 
 #call function
-update_alamut_coord(input_file_list)
+#update_alamut_coord(input_file_list)
 
 #reorder the columns to match the csv file format used downstream in the workflow
 def reorder(input_file_list):
@@ -395,7 +410,7 @@ def reorder(input_file_list):
 	print('Mutation reports formated for output')
 
 #call function
-reorder(input_file_list)
+#reorder(input_file_list)
 
 #add the date and time to the csv file for tracability
 def add_date_time(input_file_list):
@@ -419,7 +434,7 @@ def add_date_time(input_file_list):
 	print('Mutation reports are ready')
 
 #call function
-add_date_time(input_file_list)		
+#add_date_time(input_file_list)		
 
 #move files into a relevant directory
 def make_folder(input_file_list):
@@ -432,6 +447,4 @@ def make_folder(input_file_list):
 		shutil.move(item, folder)
 
 #call function
-make_folder(input_file_list)
-
-
+#make_folder(input_file_list)
