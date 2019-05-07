@@ -34,9 +34,11 @@ pyliftover using 'easy_install pyliftover'
 
 USER GUIDE
 
-This tool must be provided with a single 'proband_file_*.csv' input file. The tool assumes this file will be found in the same dirctory as the script. No other files with this name format should be in the directory. 
+This tool should be provided with a single 'proband_file_*.csv' input file. The tool assumes this file will be found in the same dirctory as the script. No other files with this name format should be in the directory. If there is more than one file with the 'proband_file_*.csv' naming format, the script will run for the most recent file. 
 
-All files associated with the run will be transfered to a directory named according to the date of the run in the format yyy-mm-dd. There should not be another directory with this name. 
+There should not be other files with the naming format 'Gel2MDT_Export_*_MutationReport.csv' or 'empty_files.txt' in the directory. If files with these names exist, they will be moved to a directory called 'temp'. This directory should be removed before running the script again. If not, and if a following run requires files to be moved to a 'temp' directory, any files with the same name will be overwritten. This could be of particularly relevance for 'empty_files.txt' files.  
+
+All files associated with the run will be transfered to a directory named according to the date of the run in the format yyy-mm-dd. There should not be another directory with this name. If there is another directory with this name, the directory will be named with a '.' on the end for version control. Thus, if the script is run 5 times in one day, the 5th run will create a directory named 'date....'.
 
 
 SUPPORT
