@@ -13,6 +13,7 @@ import os
 import fnmatch
 import glob
 import shutil
+import lxml
 from collections import defaultdict 
 from pyliftover import LiftOver
 
@@ -30,7 +31,7 @@ conn = psycopg2.connect(host='localhost', database=db_name, user=username, passw
 cur = conn.cursor()
 
 #check if csv files output from this script already exist in the current directory - move to a temp directory if so
-existing_files = glob.glob('Gel2MDT_Export_*_MutationReport.csv')
+existing_files = glob.glob('Gel2MDT_Export_*_MutationReport*.csv')
 if len(existing_files) >0:
 	if os.path.exists('temp'):
 		for item in existing_files:
@@ -70,10 +71,13 @@ df_gel = pd.read_csv(proband_file)
 for index, row in df_gel.iterrows():
 	gel_id = str(row[0])	
 
-	#name csv file based on gel_id
+	#name csv file based on gel_id to populate with SNP data
 	csv_file = 'Gel2MDT_Export_%s_MutationReport.csv' % (gel_id,)
 
-	#populate csv file from the database
+	#name csv file based on gel_id to populate with SV data - this need handling differently but will be appended to Mutation Report file later in the script 
+	csv_file_SV = 'Gel2MDT_Export_%s_MutationReport_SV.csv' % (gel_id,)
+
+	#populate SNP csv file from the database
 	def variant_pull(gel_id):
 		
 		#specify headers of output csv file
@@ -83,19 +87,19 @@ for index, row in df_gel.iterrows():
 		cur.execute('''
 		SELECT DISTINCT "Variant"."position", "Gene"."hgnc_name", "Variant"."reference", "Variant"."alternate", "Variant"."chromosome", "ProbandVariant"."zygosity", "TranscriptVariant"."hgvs_g", "TranscriptVariant"."hgvs_g", "ProbandVariant"."max_tier", "ToolOrAssemblyVersion"."version_number"
 		FROM "Proband"
-		LEFT JOIN "Family" ON "Proband"."family_id" = "Family"."id"
-		LEFT JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
-		LEFT JOIN "GELInterpretationReport" ON "InterpretationReportFamily"."id" = "GELInterpretationReport"."ir_family_id"
-		LEFT JOIN "ToolOrAssemblyVersion" ON "GELInterpretationReport"."assembly_id" = "ToolOrAssemblyVersion"."id"
-		LEFT JOIN "ProbandVariant" ON "GELInterpretationReport"."id" = "ProbandVariant"."interpretation_report_id"
-		LEFT JOIN "Variant" ON "ProbandVariant"."variant_id" = "Variant"."id"
-		LEFT JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
-		LEFT JOIN "Transcript" ON "TranscriptVariant"."transcript_id" = "Transcript"."id"
-		LEFT JOIN "Gene" ON "Transcript"."gene_id" = "Gene"."id"
+		FULL OUTER JOIN "Family" ON "Proband"."family_id" = "Family"."id"
+		FULL OUTER JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
+		FULL OUTER JOIN "GELInterpretationReport" ON "InterpretationReportFamily"."id" = "GELInterpretationReport"."ir_family_id"
+		FULL OUTER JOIN "ToolOrAssemblyVersion" ON "GELInterpretationReport"."assembly_id" = "ToolOrAssemblyVersion"."id"
+		FULL OUTER JOIN "ProbandVariant" ON "GELInterpretationReport"."id" = "ProbandVariant"."interpretation_report_id"
+		FULL OUTER JOIN "Variant" ON "ProbandVariant"."variant_id" = "Variant"."id"
+		FULL OUTER JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
+		FULL OUTER JOIN "Transcript" ON "TranscriptVariant"."transcript_id" = "Transcript"."id"
+		FULL OUTER JOIN "Gene" ON "Transcript"."gene_id" = "Gene"."id"
 		WHERE "Variant"."position" IS NOT NULL AND "Proband"."gel_id" = %s
 		''', (gel_id,))
 
-		#write csv file for each gel id
+		#write SNP csv file for each gel id
 		rows = cur.fetchall()
 		filename = 'Gel2MDT_Export_%s_MutationReport.csv' % (gel_id,)
 		with open(filename, 'w') as file:
@@ -107,16 +111,90 @@ for index, row in df_gel.iterrows():
 	#call function
 	variant_pull(gel_id)
 
-	#some gel ids return empty csv files - inform user and delete files
-	def delete_csv(csv_file):
-		df = pd.read_csv(csv_file)
+	#some gel ids return empty SNP csv files - delete files and add gel ids to a txt file for review
+	def delete_csv(filename):
+		df = pd.read_csv(filename)
 		if df.dropna().empty:
 			with open('empty_files.txt', 'a') as f:
-				f.write(csv_file + '\n')
-			os.remove(csv_file)
+				f.write(filename + '\n')
+			os.remove(filename)
 
 	#call function
 	delete_csv(csv_file)
+
+	#populate SV csv file from the database
+	def variant_pull_sv(gel_id):
+		
+		#specify headers of output csv file
+		column_head = ['Start', 'End', 'Gene', 'Chr', 'Tier', 'Reference Genome', 'Variant Type']
+
+		#pull relevant data out of the database for each gel id
+		cur.execute('''
+		SELECT DISTINCT "SVRegion"."sv_start", "SVRegion"."sv_end", "Gene"."hgnc_name", "SVRegion"."chromosome", "ProbandSV"."max_tier", "ToolOrAssemblyVersion"."version_number", "SV"."variant_type"
+		FROM "Proband"
+		FULL OUTER JOIN "Family" ON "Proband"."family_id" = "Family"."id"
+		FULL OUTER JOIN "InterpretationReportFamily" ON "Family"."id" = "InterpretationReportFamily"."participant_family_id"
+		FULL OUTER JOIN "GELInterpretationReport" ON "InterpretationReportFamily"."id" = "GELInterpretationReport"."ir_family_id"
+		FULL OUTER JOIN "ToolOrAssemblyVersion" ON "GELInterpretationReport"."assembly_id" = "ToolOrAssemblyVersion"."id"
+		FULL OUTER JOIN "ProbandVariant" ON "GELInterpretationReport"."id" = "ProbandVariant"."interpretation_report_id"
+		FULL OUTER JOIN "ProbandSV" ON "GELInterpretationReport"."id" = "ProbandSV"."interpretation_report_id"
+		FULL OUTER JOIN "SV" ON "ProbandSV"."sv_id" = "SV"."id"
+		FULL OUTER JOIN "SVRegion" ON "SV"."sv_region1_id" = "SVRegion"."id"
+		FULL OUTER JOIN "Variant" ON "ProbandVariant"."variant_id" = "Variant"."id"
+		FULL OUTER JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
+		FULL OUTER JOIN "Transcript" ON "TranscriptVariant"."transcript_id" = "Transcript"."id"
+		FULL OUTER JOIN "Gene" ON "Transcript"."gene_id" = "Gene"."id"
+		WHERE "Variant"."position" IS NOT NULL AND "Proband"."gel_id" = %s
+		''', (gel_id,))
+
+		#write SV csv file for each gel id
+		rows = cur.fetchall()
+		filename = 'Gel2MDT_Export_%s_MutationReport_SV.csv' % (gel_id,)
+		with open(filename, 'w') as file:
+			writer = csv.writer(file, delimiter=',')
+			writer.writerow(column_head)
+			for row in rows:
+				writer.writerow(row)
+	
+	#call function
+	variant_pull_sv(gel_id)
+
+	#call function to delete empty SV files
+	delete_csv(csv_file_SV)
+
+#the empty_files.txt file now holds a list of empty SV and SNP gel ids - therefore truly empty gel ids are in twice and need the duplicate removing - those in once are not truely empty as they have one type of variant and need removing 
+
+def emptyfiles():
+	
+	#check if file exists
+	if os.path.exists('./empty_files.txt'):
+	
+		#read in file as pandas dataframe and provide a header name
+		df = pd.read_csv('empty_files.txt', header = None, names = ['Empty Files'])
+
+		#extract Gel ID from the list of files and save it in a new column
+		df['gelID'] = df['Empty Files'].str.split('_', expand=True)[2]
+		
+		#identify those that are duplicated and remove those that are not
+		df = df[df.duplicated(subset=['gelID'], keep=False)]
+		
+		#delete one of the duplicated files (the second which will always be the SV)
+		df = df[df.duplicated(subset=['gelID'], keep='last')]
+
+		#drop the Gel ID column
+		df = df.drop(columns=['gelID'])
+		
+		#overwrite the file, don't keep the header or index
+		df.to_csv('empty_files.txt', header=False, index=False, sep=',')
+
+#call the function
+emptyfiles()
+
+##########################
+#                        #
+# First format snp files #
+#                        #
+##########################
 
 #assign each of the csv files to a variable so LiftOver can be carried out for each of them
 input_file_list = glob.glob('Gel2MDT_Export_*_MutationReport.csv')
@@ -131,7 +209,7 @@ def lift_over(input_file_list):
 		#tool requires input in format 'chr1	112345678' so add 'chr' as string before chromosome no. in 'Chr' field
 		df['Chr'] = 'chr' + df['Chr'].astype(str)
 
-		#tool requires Mitochondrial genome in format 'chrM', ours is 'chrMT' - this is the only instance a T would end the field, so strip it
+		#users want mitochondria in format 'M' not 'MT' - strip T
 		df['Chr'] = df['Chr'].str.rstrip('T')
 	
 		#create blank field for Hg19 conversion position
@@ -141,19 +219,17 @@ def lift_over(input_file_list):
 		for index, row in df.iterrows():
 
 			#perform liftover of build 38 coordinates to build 37 
-			if row[9] == 'GRCh38':
+			if row[9] == 'GRCh38' and row[4] != 'chrM':
 				#use 'Chr' and 'hg38 Reference Position' as input for liftover tool 
 				LiftOver_results = lo.convert_coordinate(row[4], row[0])
 				#append results to Hg19
 				Hg19.append(LiftOver_results)
 
-			#do not perform liftover of coordinates already in build 37
-			elif row[9] == 'GRCh37':
-				#set liftover result as original 37 coordinate  
+			#do not perform liftover on coordinates already in build 37 or for mito 
+			else:
 				LiftOver_results = row[0]
-				#append results to Hg19
 				Hg19.append(LiftOver_results)
-	
+
 		#populate empty Hg19 field with LiftOver results
 		df['Hg19'] = Hg19
 
@@ -176,12 +252,13 @@ def reformat_lift_over(input_file_list):
 		for index, row in df.iterrows():
 
 			#reformat the output of build 38 to 37 liftover 
-			if row[9] == 'GRCh38':
+			if row[9] == 'GRCh38' and row[4] != 'chrM':
+
 				#split the Hg19 field into 4 on ',' ( [('chr1' / 12345678 / '+' / 12345678910)] ) and save index 1 (zero based) as 'Reference Position' 
 				df['Reference Position'] = df['Hg19'].str.split(',', n=4, expand=True)[1]
 
-			#not necessary to reformat coordinates that were already build 37 before saving to 'Reference Position' 
-			else: 
+			#not necessary to reformat coordinates that were not lifted over
+			else:
 				df['Reference Position'] = df['hg38 Reference Position']
 
 		#drop unecessary column
@@ -242,37 +319,37 @@ def lift_over_genomic_coord(input_file_list):
 		#itterate over rows of dataframe
 		for index, row in df.iterrows():
 
-			#perform liftover of build 38 coordinates to build 37 
-			if row[9] == 'GRCh38':
+			#perform liftover of build 38 coordinates to build 37
+			if row[9] == 'GRCh38' and row[4] != 'chrM':
 				#use 'Chr' and 'First Coordinate' as input for liftover tool
 				liftover = lo.convert_coordinate(row[4], row[11])
 				#append results
 				First_Coordinate_LiftOver.append(liftover)
-
+			
 			#do not perform liftover of coordinates already in build 37
-			elif row[9] == 'GRCh37':
+			else:
 				#set liftover result as original 37 coordinate 
 				liftover = row[11]
 				#append results to Hg19
 				First_Coordinate_LiftOver.append(liftover)
-
+	
 		#itterate over rows of dataframe
 		for index, row in df.iterrows():
 
-			#perform liftover of build 38 coordinates to build 37 
-			if row[9] == 'GRCh38':
-				#use 'Chr' and 'Second Coordinate' as input for liftover tool
+			#perform liftover of build 38 coordinates to build 37
+			if row[9] == 'GRCh38' and row[4] != 'chrM':
+				#use 'Chr' and 'First Coordinate' as input for liftover tool
 				liftover = lo.convert_coordinate(row[4], row[12])
 				#append results
 				Second_Coordinate_LiftOver.append(liftover)
 			
 			#do not perform liftover of coordinates already in build 37
-			elif row[9] == 'GRCh37':
+			else:
 				#set liftover result as original 37 coordinate 
 				liftover = row[12]
 				#append results to Hg19
 				Second_Coordinate_LiftOver.append(liftover)
-	
+				
 		#populate empty Coordinate LiftOver fields with results
 		df['First Coordinate LiftOver'] = First_Coordinate_LiftOver
 		df['Second Coordinate LiftOver'] = Second_Coordinate_LiftOver
@@ -298,8 +375,8 @@ def reformat_genomic_lift_over(input_file_list):
 
 		for index, row in df.iterrows():
 
-			#reformat the output of build 38 to 37 liftover
-			if row[9] == 'GRCh38':
+			#reformat the output of build 38 to 37 liftover	
+			if row[9] == 'GRCh38' and row[4] != 'M':
 				#split 'First Coordinate LiftOver' into 4 on ',' ( [('chr1' / 12345678 / '+' / 12345678910)] ) and save index 1 as 'First Referenece Position'
 				df['First Reference Position'] = df['First Coordinate LiftOver'].str.split(',', n=4, expand=True)[1]
 				#do the same with the 'Second Coordinate LiftOver'. Also split on '[]' as this is the output for the rows without a second coordinate to liftover. 
@@ -414,6 +491,192 @@ def reorder(input_file_list):
 
 #call function
 reorder(input_file_list)
+
+########################
+#                      #
+# Next format sv files #
+#                      #
+########################
+
+#assign each of the SV csv files to a variable so functions can be carried out for each of them
+input_file_list_SV = glob.glob('Gel2MDT_Export_*_MutationReport_SV.csv')
+
+#the SV csv files give rise to many replica rows due to one SV crossing over numerous genes - want to make this one record with the genes listed as ; seperated values
+def combine_genes(input_file_list_SV):
+
+	#read in batch of csv files as pandas dataframe 
+	for input_file in input_file_list_SV:
+		df = pd.read_csv(input_file)
+
+		#group the other identical columns and join the genes as ; seperated calues 
+		df = df.groupby(['Start', 'End', 'Chr', 'Tier', 'Reference Genome', 'Variant Type']).agg(lambda x: '; '.join(set(x)))
+
+		#overwrite the csv files
+		df.to_csv(input_file, sep=',')
+
+#call the function
+combine_genes(input_file_list_SV)
+
+#liftover of the start and end positions
+def lift_over_SV(input_file_list_SV):
+	
+	#read in batch of csv files as pandas dataframe
+	for input_file in input_file_list_SV:
+		df = pd.read_csv(input_file, header=0, names= ['Start', 'End', 'Chr', 'Tier', 'Reference Genome', 'Variant Type', 'Gene'])
+
+		#tool requires input in format 'chr1 112345678' so add 'chr' as string before chromosome no. in 'Chr' field
+		df['Chr'] = 'chr' + df['Chr'].astype(str)
+
+		#users want mitochondria in format 'M' not 'MT' - strip T
+		df['Chr'] = df['Chr'].str.rstrip('T')
+	
+		#create blank field for Hg19 conversion position
+		start_Hg19 = []
+		end_Hg19 = []
+				
+		#itterate over rows of dataframe 
+		for index, row in df.iterrows():
+
+			#perform liftover of build 38 coordinates to build 37 
+			if row[4] == 'GRCh38' and row[2] != 'chrM':
+				#use 'Chr' and 'hg38 Reference Position' as input for liftover tool 
+				LiftOver_results_start = lo.convert_coordinate(row[2], row[0])
+				LiftOver_results_end = lo.convert_coordinate(row[2], row[1])
+				#append results to Hg19
+				start_Hg19.append(LiftOver_results_start)
+				end_Hg19.append(LiftOver_results_end)
+
+
+			#do not perform liftover of coordinates already in build 37
+			else:
+				#set liftover result as original 37 coordinate  
+				LiftOver_results_start = row[0]
+				LiftOver_results_end = row[1]
+
+				#append results to Hg19
+				start_Hg19.append(LiftOver_results_start)
+				end_Hg19.append(LiftOver_results_end)
+
+
+		#populate empty Hg19 field with LiftOver results
+		df['start_Hg19'] = start_Hg19
+		df['end_Hg19'] = end_Hg19
+
+		#overwrite csv file
+		df.to_csv(input_file, sep=',')
+
+#call function		
+lift_over_SV(input_file_list_SV)
+
+#as above, liftover output is '[('chr1', 12345678, '+', 12345678910)] - need to extract the coordinate
+def reformat_lift_over_SV(input_file_list_SV):
+
+	#read in batch of csv files as pandas dataframe
+	for input_file in input_file_list_SV:
+		df = pd.read_csv(input_file)
+
+		#in the liftover function, pandas assigned an index - assign the index to this column again to prevent duplication
+		df.set_index('Unnamed: 0', inplace=True)
+
+		for index, row in df.iterrows():
+
+			#reformat the output of build 38 to 37 liftover 
+			if row[4] == 'GRCh38' and row[2] != 'chrM':
+				#split the Hg19 field into 4 on ',' ( [('chr1' / 12345678 / '+' / 12345678910)] ) and save index 1 (zero based) as 'Reference Position' 
+				df['Start'] = df['start_Hg19'].str.split(',', n=4, expand=True)[1]
+				df['End'] = df['end_Hg19'].str.split(',', n=4, expand=True)[1]
+				df['Reference Position'] = df['Start'] + '-' + df['End'].str.replace(" ", "")	
+			
+			#not necessary to reformat coordinates that were not lifted over
+			else:
+				df['Reference Position'] = df['start_Hg19'] + '-' + df['end_Hg19'].str.replace(" ", "")		
+
+		#drop unecessary column				
+		df.drop(columns = ['Start', 'End', 'Reference Genome', 'start_Hg19', 'end_Hg19'], inplace=True)
+
+		#overwrite csv file
+		df.to_csv(input_file, sep=',')
+		
+#call function
+reformat_lift_over_SV(input_file_list_SV)
+
+#reorder the columns to match the csv file format used downstream in the workflow
+def reformat_SV(input_file_list_SV):
+	
+	#read in batch of csv files as pandas dataframe
+	for input_file in input_file_list_SV:
+		df = pd.read_csv(input_file, header=0, names= ['Chr', 'Tier', 'Variant Type', 'Gene', 'Reference Position'])
+
+		#remove 'chr' from Chr fields
+		df['Chr'] = df['Chr'].str.strip('chr')
+
+		#create Genomic Coordinate column in the format chr:start-end
+		df['Genomic Coordinate'] = df['Chr'] + ':' + df['Reference Position'].str.replace(" ", "")
+
+		#remove 'Tier' from Tier column 
+		df['Tier'] = df['Tier'].str.strip('TIER')
+
+		#add empty columns columns to match SNP file
+		df['Reference Sequence'] = ''
+		df['Alternative Sequence'] = ''
+		df['Genotype'] = ''
+		df['Alamut'] = '' 
+		
+
+		#Reorder the columns of the dataframe 
+		df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']]
+
+		#overwrite csv, don't save the index
+		df.to_csv(input_file, sep=',', index=False)
+
+#call function
+reformat_SV(input_file_list_SV)
+
+##########################
+#                        #
+# Merge and format files #
+#                        #
+##########################
+
+def merge():
+
+	#create lists of the two file types
+	snp_files = glob.glob('Gel2MDT_Export_*port.csv') 
+	sv_files = glob.glob('Gel2MDT_Export_*port_SV.csv') 
+
+	#if there are snp files, iterate through them
+	if len(sv_files) > 0:
+		if len(snp_files) > 0:
+			for x in snp_files:
+				#set the first 30 characters of the filename string to 'match'
+				match = x[:30]
+				#iterate through the sv files
+				for y in sv_files:
+					#if the first 30 characters match a snp file, concat the two files and overwrite the snp file
+					if y[:30] == match:
+						a = pd.read_csv(x)
+						b = pd.read_csv(y)
+						merged = pd.concat([a, b])
+						merged.to_csv(x, index = None)
+						#remove the sv file
+						os.remove(y)
+
+#call function
+merge()
+
+#rename remaining SV files (without matching SNP file) to mutation report convention
+def rename_sv():
+
+	#create list
+	sv_files = glob.glob('Gel2MDT_Export_*port_SV.csv') 
+
+	#iterate through sv files and remove '_SV'
+	for y in sv_files:
+		new_filename = y.replace('_SV', '')
+		os.rename(y, new_filename)
+
+#call function
+rename_sv()
 
 #add the date and time to the csv file for tracability
 def add_date_time(input_file_list):
