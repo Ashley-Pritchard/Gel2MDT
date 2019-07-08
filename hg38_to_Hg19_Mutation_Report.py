@@ -138,12 +138,13 @@ for index, row in df_gel.iterrows():
 		FULL OUTER JOIN "ToolOrAssemblyVersion" ON "GELInterpretationReport"."assembly_id" = "ToolOrAssemblyVersion"."id"
 		FULL OUTER JOIN "ProbandVariant" ON "GELInterpretationReport"."id" = "ProbandVariant"."interpretation_report_id"
 		FULL OUTER JOIN "ProbandSV" ON "GELInterpretationReport"."id" = "ProbandSV"."interpretation_report_id"
+		FULL OUTER JOIN "ProbandSVGene" ON "ProbandSV"."id" = "ProbandSVGene"."proband_sv_id"
 		FULL OUTER JOIN "SV" ON "ProbandSV"."sv_id" = "SV"."id"
 		FULL OUTER JOIN "SVRegion" ON "SV"."sv_region1_id" = "SVRegion"."id"
 		FULL OUTER JOIN "Variant" ON "ProbandVariant"."variant_id" = "Variant"."id"
 		FULL OUTER JOIN "TranscriptVariant" ON "Variant"."id" = "TranscriptVariant"."variant_id"
 		FULL OUTER JOIN "Transcript" ON "TranscriptVariant"."transcript_id" = "Transcript"."id"
-		FULL OUTER JOIN "Gene" ON "Transcript"."gene_id" = "Gene"."id"
+		FULL OUTER JOIN "Gene" ON "ProbandSVGene"."gene_id" = "Gene"."id"
 		WHERE "Variant"."position" IS NOT NULL AND "Proband"."gel_id" = %s
 		''', (gel_id,))
 
@@ -483,8 +484,11 @@ def reorder(input_file_list):
 		#drop the original hg38 Reference Position
 		df.drop(columns = ['hg38 Reference Position'], inplace=True)
 
+		#add empty columns columns to match SV file
+		df['Variant Type'] = ''
+
 		#Reorder the columns of the dataframe 
-		df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']]
+		df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier', 'Variant Type']]
 
 		#overwrite csv, don't save the index
 		df.to_csv(input_file, sep=',', index=False)
@@ -585,11 +589,11 @@ def reformat_lift_over_SV(input_file_list_SV):
 				#split the Hg19 field into 4 on ',' ( [('chr1' / 12345678 / '+' / 12345678910)] ) and save index 1 (zero based) as 'Reference Position' 
 				df['Start'] = df['start_Hg19'].str.split(',', n=4, expand=True)[1]
 				df['End'] = df['end_Hg19'].str.split(',', n=4, expand=True)[1]
-				df['Reference Position'] = df['Start'] + '-' + df['End'].str.replace(" ", "")	
+				df['Reference Position'] = df['Start'].str.replace(" ", "") + '-' + df['End'].str.replace(" ", "")	
 			
 			#not necessary to reformat coordinates that were not lifted over
 			else:
-				df['Reference Position'] = df['start_Hg19'] + '-' + df['end_Hg19'].str.replace(" ", "")		
+				df['Reference Position'] = df['start_Hg19'].str.replace(" ","") + '-' + df['end_Hg19'].str.replace(" ", "")
 
 		#drop unecessary column				
 		df.drop(columns = ['Start', 'End', 'Reference Genome', 'start_Hg19', 'end_Hg19'], inplace=True)
@@ -624,7 +628,7 @@ def reformat_SV(input_file_list_SV):
 		
 
 		#Reorder the columns of the dataframe 
-		df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier']]
+		df = df[['Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier', 'Variant Type']]
 
 		#overwrite csv, don't save the index
 		df.to_csv(input_file, sep=',', index=False)
