@@ -52,6 +52,16 @@ if os.path.exists('./empty_files.txt'):
 		os.mkdir('temp')
 		shutil.move('./empty_files.txt', 'temp')
 
+#check if conversion_unavailable.txt file exists in the directory - move to a temp directory if so
+if os.path.exists('./conversion_unavailable.txt'):
+	if os.path.exists('temp'):
+		shutil.copy('./conversion_unavailable.txt', 'temp')
+		os.remove('./conversion_unavailable.txt')
+
+	else:
+		os.mkdir('temp')
+		shutil.move('./conversion_unavailable.txt', 'temp')
+
 #read in the proband list csv file(s) provided, if there is more than 1 - run the most recent 
 proband_file = glob.glob('proband_list_*.csv')
 proband_file = max(proband_file, key=os.path.getctime)
@@ -546,6 +556,7 @@ def lift_over_SV(input_file_list_SV):
 				#use 'Chr' and 'hg38 Reference Position' as input for liftover tool 
 				LiftOver_results_start = lo.convert_coordinate(row[2], row[0])
 				LiftOver_results_end = lo.convert_coordinate(row[2], row[1])
+
 				#append results to Hg19
 				start_Hg19.append(LiftOver_results_start)
 				end_Hg19.append(LiftOver_results_end)
@@ -565,12 +576,33 @@ def lift_over_SV(input_file_list_SV):
 		#populate empty Hg19 field with LiftOver results
 		df['start_Hg19'] = start_Hg19
 		df['end_Hg19'] = end_Hg19
-
+		
 		#overwrite csv file
 		df.to_csv(input_file, sep=',')
 
 #call function		
 lift_over_SV(input_file_list_SV)
+
+def conversion_blanks(input_file_list_SV):
+
+	#read in batch of csv files as pandas dataframe
+	for input_file in input_file_list_SV:
+		df = pd.read_csv(input_file, header=0, names= ['Start', 'End', 'Chr', 'Tier', 'Reference Genome', 'Variant Type', 'Gene', 'start_Hg19', 'end_Hg19'])
+
+		for index, row in df.iterrows():
+			if (df['start_Hg19'].str.contains('chr')).any() and (df['start_Hg19'].str.contains('chr')).any():
+				pass
+			else:
+				with open('conversion_unavailable.txt', 'a') as f:
+					f.write(input_file + ', ' + 'Position: ' + str(row[0]) + '-' + str(row[1]) + '\n')
+				os.remove(input_file)
+				
+				
+#call function
+conversion_blanks(input_file_list_SV)
+
+#assign each of the SV csv files to a variable so functions can be carried out for each of them
+input_file_list_SV = glob.glob('Gel2MDT_Export_*_MutationReport_SV.csv')
 
 #as above, liftover output is '[('chr1', 12345678, '+', 12345678910)] - need to extract the coordinate
 def reformat_lift_over_SV(input_file_list_SV):
@@ -713,6 +745,9 @@ def make_folder(input_file_list):
 	#move generated files into the folder
 	if os.path.exists('empty_files.txt'):
 		shutil.move('empty_files.txt', folder)
+
+	if os.path.exists('conversion_unavailable.txt'):
+		shutil.move('conversion_unavailable.txt', folder)
 
 	shutil.move(proband_file, folder)
 
