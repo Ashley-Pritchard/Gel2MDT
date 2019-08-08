@@ -408,6 +408,50 @@ def lift_over_genomic_coord(input_file_list):
 #call function
 lift_over_genomic_coord(input_file_list)
 
+def conversion_blanks_2(input_file_list):
+
+	#read in batch of csv files as pandas dataframe
+	for input_file in input_file_list:
+		df = pd.read_csv(input_file, header=0, names= ['hg38 Reference Position', 'Gene', 'Reference Sequence', 'Alternative Sequence', 'Chr', 'Genotype', 'Genomic Coordinate', 'Alamut', 'Tier', 'Reference Genome', 'Reference Position', 'First Coordinate', 'Second Coordinate', 'First Coordinate LiftOver', 'Second Coordinate LiftOver'])
+		
+		df['Second Coordinate'] = df['Second Coordinate'].fillna('empty')
+		df['First Coordinate LiftOver'] = df['First Coordinate LiftOver'].astype(str)
+		df['Second Coordinate LifOver'] = df['Second Coordinate LiftOver'].astype(str)
+		
+		for index, row in df.iterrows():
+			if row[9] == 'GRCh38' and row[4] != 'M' and row[12] != 'empty':
+				if row['First Coordinate LiftOver'].find('chr') > 0 and row['Second Coordinate LiftOver'].find('chr') > 0:
+					pass
+				else:
+					with open('conversion_unavailable.txt', 'a') as f:
+						f.write(input_file + ', ' + 'Position: ' + str(row[0]) + '\n')
+
+			elif row[9] == 'GRCh38' and row[4] != 'M' and row[12] == 'empty':
+				if row['First Coordinate LiftOver'].find('chr') > 0:
+					pass
+				else:
+					with open('conversion_unavailable.txt', 'a') as f:
+						f.write(input_file + ', ' + 'Position: ' + str(row[0]) + '\n')
+
+			else:
+				pass
+			
+	if os.path.exists('conversion_unavailable.txt'):
+		with open('conversion_unavailable.txt', 'r') as f:
+			to_delete = f.read().splitlines()
+
+		for line in to_delete:
+			for input_file in input_file_list:
+				if line.split(',')[0] == input_file:
+					os.remove(input_file)
+				
+				
+#call function
+conversion_blanks_2(input_file_list)
+
+#assign each of the SV csv files to a variable so functions can be carried out for each of them
+input_file_list = glob.glob('Gel2MDT_Export_*_MutationReport.csv')
+
 #as above, liftover output is '[('chr1', 12345678, '+', 12345678910)] - need to extract the coordinate
 def reformat_genomic_lift_over(input_file_list):
 
