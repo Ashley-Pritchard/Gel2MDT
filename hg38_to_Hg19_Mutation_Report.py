@@ -590,11 +590,19 @@ def conversion_blanks(input_file_list_SV):
 		df = pd.read_csv(input_file, header=0, names= ['Start', 'End', 'Chr', 'Tier', 'Reference Genome', 'Variant Type', 'Gene', 'start_Hg19', 'end_Hg19'])
 
 		for index, row in df.iterrows():
-			if (df['start_Hg19'].str.contains('chr')).any() and (df['start_Hg19'].str.contains('chr')).any():
+			if row['start_Hg19'].find('chr') > 0:
 				pass
 			else:
 				with open('conversion_unavailable.txt', 'a') as f:
 					f.write(input_file + ', ' + 'Position: ' + str(row[0]) + '-' + str(row[1]) + '\n')
+			
+	if os.path.exists('conversion_unavailable.txt'):
+		with open('conversion_unavailable.txt', 'r') as f:
+			to_delete = f.read().splitlines()
+
+	for line in to_delete:
+		for input_file in input_file_list_SV:
+			if line.split(',')[0] == input_file:
 				os.remove(input_file)
 				
 				
